@@ -138,6 +138,17 @@ def tech_hits(job):
     return len(set(KEYWORD_RE.findall((job["title"] + " " + job["description"]).lower())))
 
 
+WAREHOUSE_WORDS = [
+    "lager", "pakkeri", "pluk", "varemodtagelse", "truck", "palle", "logistik",
+    "forsendelse", "sortering", "warehouse", "wms", "scanning", "stabler",
+]
+WAREHOUSE_RE = re.compile(r"\b(" + "|".join(map(re.escape, WAREHOUSE_WORDS)) + r")")
+
+
+def warehouse_job(job):
+    return bool(WAREHOUSE_RE.search(job["title"].lower()))
+
+
 def _matches(text, patterns):
     text = (text or "").lower()
     for pattern in patterns:
@@ -396,19 +407,26 @@ def main():
             SCORES.write_text(json.dumps(cache, ensure_ascii=False))
     SCORES.write_text(json.dumps(cache, ensure_ascii=False))
     scored.sort(key=lambda j: j["final_percent"], reverse=True)
+    it_jobs = [j for j in scored if not warehouse_job(j)]
+    warehouse_jobs = [j for j in scored if warehouse_job(j)]
+    print(f"IT: {len(it_jobs)} | warehouse/logistics: {len(warehouse_jobs)}")
 
-    table = Table(title=f"TOP {TOP} jobs for {PROFILE['location_preference']}")
+    render(f"TOP {TOP} IT jobs for {PROFILE['location_preference']}", it_jobs)
+    render(f"TOP {TOP} warehouse / logistics for {PROFILE['location_preference']}", warehouse_jobs)
+
+
+def render(title, jobs):
+    table = Table(title=title)
     table.add_column("match", justify="right")
     table.add_column("title", overflow="fold")
     table.add_column("company")
     table.add_column("location")
     table.add_column("source")
 
-    for job in scored[:TOP]:
-        title = Text(job["title"][:60], style=f"link {job['url']}")
+    for job in jobs[:TOP]:
         table.add_row(
             percent_text(job["final_percent"]),
-            title,
+            Text(job["title"][:60], style=f"link {job['url']}"),
             job["company"][:30],
             job["location"][:25],
             job["source"],

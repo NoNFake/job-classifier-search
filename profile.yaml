@@ -145,6 +145,14 @@ blacklist_title_keywords:
   - "chauffør"
   - "vvs"
   - "barselsvikariat"
+  - "phd scholarship"
+  - "corporate strategy"
+  - "assessor"
+  - "farmakokinetik"
+  - "planlægger"
+  - "piccolo"
+  - "taekwondo"
+  - "afdelingsleder"
 
 blacklist_description_patterns:
   - "sikkerhedsgodkendelse"
