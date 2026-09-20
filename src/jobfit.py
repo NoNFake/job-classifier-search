@@ -17,7 +17,7 @@ from sources.jobnet import get_jobs as jobnet_jobs
 from sources.enrich import enrich_jobindex
 
 PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
-TOP = 50
+TOP = 100
 SCORES = Path(".cache/scores.json")
 CALIBRATION = Path("calibration.json")
 CACHE_VERSION = "enriched-1"
@@ -117,6 +117,25 @@ PROFILE_SUMMARY = (
 )
 
 # print(PROFILE_SUMMARY)
+
+TECH_WORDS = [
+    "python", "fastapi", "postgres", "docker", "git", "typescript", "react", "aws", "kubernetes",
+    "langchain", "rag", "transformer", "machine learning", "ml", "genai", "llm", "api", "backend",
+    "frontend", "devops", "cloud", "sql", "database", "data", "software", "developer", "engineer",
+    "udvikler", "programmør", "systemudvikling", "infrastructure", "linux", "azure", "gcp",
+    "snowflake", "spark", "airflow", "etl", "network", "netværk", "it-arkitekt", "it-konsulent",
+]
+KEYWORD_LIST = sorted({
+    *TECH_WORDS,
+    *(s.lower() for s in PROFILE["skills"]["strong"]),
+    *(s.lower() for s in PROFILE["skills"]["good"]),
+})
+KEYWORD_RE = re.compile(r"\b(" + "|".join(map(re.escape, KEYWORD_LIST)) + r")")
+
+
+def tech_hits(job):
+    return len(set(KEYWORD_RE.findall((job["title"] + " " + job["description"]).lower())))
+
 
 def build_state(job):
     return {
@@ -302,8 +321,9 @@ def load_jobs():
 
 
 def main():
-    jobs = load_jobs()
-    print(f"jobs after dedupe: {len(jobs)}")
+    all_jobs = load_jobs()
+    jobs = [j for j in all_jobs if tech_hits(j)]
+    print(f"jobs after dedupe: {len(all_jobs)} | relevant: {len(jobs)}")
 
     calibration = json.loads(CALIBRATION.read_text()) if CALIBRATION.exists() else {}
     if calibration:

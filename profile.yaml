@@ -3,16 +3,60 @@ remote_allowed: true
 hybrid_allowed: true
 
 roles:
+  # IT & Software
   - Backend Engineer
   - Data Engineer
   - Machine Learning Engineer
   - GenAI Engineer
   - Python Engineer
+  - Student Developer
+  - Software Developer
+  - IT Support
+  - IT-supporter
+  - System Administrator
+  - Studentermedhjælper IT
+  # Склады, логистика и физическая работа 
+  - Lagermedarbejder
+  - Lagerarbejder
+  - Lager- og logistikmedarbejder
+  - Pakkeriarbejder
+  - Plukker og pakker
+  - Varemodtagelse
+  - Warehouse Associate
+  - Warehouse Worker
+  - Logistics Assistant
+  - Sorteringsmedarbejder
 
 skills:
-  strong: [Python, FastAPI, PostgreSQL, Docker, Git]
-  good: [TypeScript, React, AWS, Kubernetes, LangChain, RAG, fine-tuning, transformers]
-  learning: [Danish]
+  strong: 
+    - Python
+    - FastAPI
+    - PostgreSQL
+    - Docker
+    - Git
+    - C++
+    - Linux
+    - Bash
+    - varemodtagelse
+    - pluk og pak
+    - pakkeri
+    - lagerstyring
+    - scanning
+    - WMS
+  good: 
+    - TypeScript
+    - React
+    - AWS
+    - Kubernetes
+    - LangChain
+    - RAG
+    - Android SDK
+    - llama.cpp
+    - truckcertifikat
+    - palleløfter
+    - forsendelse
+  learning: 
+    - Danish
 
 languages:
   English: fluent
@@ -25,10 +69,94 @@ work_authorization:
 
 salary_min_dkk_month: 15000
 seniority: junior
-preferred_seniority: [junior, mid]
+preferred_seniority: 
+  - student
+  - intern
+  - junior
+  - entry-level
+  - ufaglært
 
-blacklist_keywords:
-  - "100% commission"
-  - "unlimited income"
-  - "crypto MLM"
-  - "no experience needed high salary"
+blacklist_companies:
+  - "Politiets Efterretningstjeneste"
+  - "PET"
+  - "Forsvarets Efterretningstjeneste"
+  - "FE"
+  - "Forsvarsministeriets Materiel-"
+  - "FMI"
+  - "Rigspolitiet"
+  - "Københavns Politi"
+  - "Danmarks Nationalbank"
+  - "Forsvaret"
+  - "Salling Group"
+  - "Netto"
+  - "Føtex"
+  - "Bilka"
+  - "BR"
+  - "Coop"
+  - "365discount"
+  - "SuperBrugsen"
+  - "Kvickly"
+  - "Dagli'Brugsen"
+  - "Lidl"
+  - "Aldi"
+  - "Rema 1000"
+  - "Meny"
+  - "Spar"
+  - "Min Købmand"
+  - "Dagrofa"
+  - "Normal"
+  - "Flying Tiger"
+  - "Jysk"
+
+blacklist_title_keywords:
+  - "senior"
+  - "lead"
+  - "principal"
+  - "architect"
+  - "head of"
+  - "director"
+  - "manager"
+  - "vp"
+  - "butikschef"
+  - "salgsassistent"
+  - "kasseassistent"
+  - "servicemedarbejder butik"
+  - "butiksmedarbejder"
+  - "kassere"
+  - "ungherbejde"
+  - "ungarbejder"
+  - "opvasker"
+  - "kok"
+  - "souschef"
+  - "tjener"
+  - "bartender"
+  - "barista"
+  - "køkkenmedhjælper"
+  - "rengøring"
+  - "pædagog"
+  - "lærer"
+  - "sygeplejerske"
+  - "social- og sundhedsassistent"
+  - "sosu"
+  - "lægesekretær"
+  - "elektriker"
+  - "tømrer"
+  - "murer"
+  - "chauffør"
+  - "vvs"
+  - "barselsvikariat"
+
+blacklist_description_patterns:
+  - "sikkerhedsgodkendelse"
+  - "sikkerhedsgodkendes"
+  - "PET sikkerhedsgodkendes"
+  - "NATO SECRET"
+  - "hemmeligt"
+  - "yderst hemmeligt"
+  - "flydende dansk"
+  - "dansk i skrift og tale er et krav"
+  - "flydende på dansk"
+  - "skal beherske dansk"
+  - "danish is required"
+  - "enrolled in a Danish"
+  - "indskrevet på et dansk universitet"
