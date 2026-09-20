@@ -1,0 +1,21 @@
+[project]
+name = "classifier"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "yurii", email = "uraklimek@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "laya>=0.3.3",
+    "requests>=2.34.2",
+    "tabulate>=0.10.0",
+]
+
+[project.scripts]
+classifier = "classifier:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
