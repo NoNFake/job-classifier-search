@@ -24,8 +24,8 @@ work_authorization:
   needs_sponsorship: false
 
 salary_min_dkk_month: 15000
-seniority: mid
-preferred_seniority: [mid, senior]
+seniority: junior
+preferred_seniority: [junior, mid]
 
 blacklist_keywords:
   - "100% commission"

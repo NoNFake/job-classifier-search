@@ -1,4 +1,5 @@
 import concurrent.futures as cf
+import hashlib
 import html
 import json
 import re
@@ -13,13 +14,40 @@ from rich.text import Text
 
 from sources.jobindex import get_jobs as jobindex_jobs
 from sources.jobnet import get_jobs as jobnet_jobs
+from sources.enrich import enrich_jobindex
 
 PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
 TOP = 50
 SCORES = Path(".cache/scores.json")
+CALIBRATION = Path("calibration.json")
+CACHE_VERSION = "enriched-1"
 
 def clean(text):
     return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
+
+
+# def normalize(job, source):
+#     if source == "jobnet":
+#         return {
+#             "source": source,
+#             "id": job.get("jobAdId"),
+#             "title": job.get("title") or "",
+#             "company": job.get("hiringOrgName") or "",
+#             "location": f"{job.get('postalCode') or ''} {job.get('postalDistrictName') or ''}".strip(),
+#             "url": job.get("jobAdUrl") or f"https://jobnet.dk/jobannonce/{job.get('jobAdId')}",
+#             "description": clean(job.get("description")),
+#             "posted": job.get("publicationDate") or "",
+#         }
+#     return {
+#         "source": source,
+#         "id": job.get("tid"),
+#         "title": job.get("headline") or "",
+#         "company": job.get("companytext") or (job.get("company") or {}).get("name") or "",
+#         "location": job.get("area") or "",
+#         "url": job.get("share_url") or "",
+#         "description": clean(job.get("description")),
+#         "posted": job.get("firstdate") or "",
+#     }
 
 
 def normalize(job, source):
@@ -33,17 +61,41 @@ def normalize(job, source):
             "url": job.get("jobAdUrl") or f"https://jobnet.dk/jobannonce/{job.get('jobAdId')}",
             "description": clean(job.get("description")),
             "posted": job.get("publicationDate") or "",
+            "deadline": job.get("applicationDeadline") or "",
+            "address": (job.get("workPlaceAddress") or "").strip(),
+            "latitude": None,
+            "longitude": None,
+            "distance_km": None,
+            "employment": job.get("jobAnnouncementTypeName") or "",
+            "home_workplace": None,
+            "external": bool(job.get("isExternal")),
+            "occupation": job.get("occupation") or "",
+            "apply_url": job.get("jobAdUrl") or "",
         }
+    addr = (job.get("addresses") or [{}])[0]
+    coords = addr.get("coordinates") or {}
+    company = job.get("company") or {}
     return {
         "source": source,
         "id": job.get("tid"),
         "title": job.get("headline") or "",
-        "company": job.get("companytext") or (job.get("company") or {}).get("name") or "",
+        "company": job.get("companytext") or company.get("name") or "",
         "location": job.get("area") or "",
         "url": job.get("share_url") or "",
         "description": clean(job.get("description")),
         "posted": job.get("firstdate") or "",
+        "deadline": job.get("lastdate") or "",
+        "address": addr.get("line") or "",
+        "latitude": coords.get("latitude"),
+        "longitude": coords.get("longitude"),
+        "distance_km": job.get("distance"),
+        "employment": "",
+        "home_workplace": job.get("home_workplace"),
+        "external": not job.get("is_local", True),
+        "occupation": "",
+        "apply_url": job.get("apply_url") or "",
     }
+
 
 def dedupe(jobs):
     seen, out = set(), []
@@ -57,6 +109,7 @@ def dedupe(jobs):
 
 PROFILE_SUMMARY = (
     f"{PROFILE['seniority']} engineer targeting {', '.join(PROFILE['roles'])}. "
+    f"Target level: {', '.join(PROFILE['preferred_seniority'])}. "
     f"Strong: {', '.join(PROFILE['skills']['strong'])}. "
     f"Good: {', '.join(PROFILE['skills']['good'])}. "
     f"Languages: {', '.join(f'{k} {v}' for k, v in PROFILE['languages'].items())}. "
@@ -139,13 +192,14 @@ def normalize_score(value, max_value):
     return clamp(value / max_value)
 
 def seniority_compatibility(job_seniority, candidate_seniority):
-    levels = {"junior": 0.0, "mid": 0.33, "senior": 0.66, "lead": 1.0}
-    candidate = levels[candidate_seniority]
-    if job_seniority <= candidate + 0.15:
+    # model "seniority" score is 0..3: junior, mid, senior, lead
+    levels = {"junior": 0.0, "mid": 1.0, "senior": 2.0, "lead": 3.0}
+    diff = job_seniority - levels[candidate_seniority]
+    if diff <= 0.5:
         return 1.0
-    if job_seniority <= candidate + 0.35:
-        return 0.7
-    return 0.35
+    if diff <= 1.5:
+        return 0.6
+    return 0.2
 
 
 def compute_final_percent(answers, profile):
@@ -167,13 +221,13 @@ def compute_final_percent(answers, profile):
     legal_score = 1.0 - 0.2 * sponsorship if not profile["work_authorization"]["needs_sponsorship"] else 1.0 - sponsorship
 
     base = (
-        0.30 * skill
-        + 0.20 * role
+        0.25 * skill
+        + 0.15 * role
         + 0.15 * family_score
         + 0.10 * language_score
         + 0.10 * location_score
         + 0.05 * legal_score
-        + 0.10 * seniority_compatibility(seniority, profile["seniority"])
+        + 0.20 * seniority_compatibility(seniority, profile["seniority"])
     )
     final = clamp(base - 0.65 * spam)
 
@@ -196,36 +250,94 @@ def score_key(job):
     return f"{job['title'].lower().strip()}|{job['company'].lower().strip()}"
 
 
+def power(probs, k):
+    scaled = [p ** k for p in probs]
+    total = sum(scaled)
+    return [p / total for p in scaled]
+
+
+def apply_calibration(answers, calibration):
+    if not calibration:
+        return answers
+    out = {}
+    for qid, ans in answers.items():
+        k = calibration.get(qid, 1.0)
+        if k == 1.0:
+            out[qid] = ans
+        elif ans["type"] == "choice":
+            keys = list(ans["probabilities"])
+            probs = power([ans["probabilities"][key] for key in keys], k)
+            out[qid] = ans | {
+                "choice": keys[probs.index(max(probs))],
+                "probabilities": dict(zip(keys, (round(p, 4) for p in probs))),
+            }
+        elif ans["type"] == "score":
+            keys = list(ans["probabilities"])
+            probs = power([ans["probabilities"][key] for key in keys], k)
+            out[qid] = ans | {
+                "score": round(sum(i * p for i, p in enumerate(probs)), 4),
+                "probabilities": dict(zip(keys, (round(p, 4) for p in probs))),
+            }
+        else:
+            probs = power([1.0 - ans["noul"], ans["noul"]], k)
+            out[qid] = ans | {"noul": round(probs[1], 4)}
+    return out
+
+
 def percent_text(value):
     style = "green" if value >= 80 else "yellow" if value >= 60 else "dim"
     return Text(f"{value}%", style=style)
 
 
-def main():
+def load_jobs():
     with cf.ThreadPoolExecutor(2) as pool:
         net, idx = pool.map(lambda fn: fn(), [jobnet_jobs, jobindex_jobs])
-
-    jobs = dedupe(
-        [normalize(j, "jobnet") for j in net] + 
-        [normalize(j, "jobindex") for j in idx] 
+    jobs =  dedupe(
+        [normalize(j, "jobnet") for j in net] +
+        [normalize(j, "jobindex") for j in idx]
     )
+    return enrich_jobindex(jobs)
+
+
+
+
+def main():
+    jobs = load_jobs()
     print(f"jobs after dedupe: {len(jobs)}")
 
+    calibration = json.loads(CALIBRATION.read_text()) if CALIBRATION.exists() else {}
+    if calibration:
+        print(f"calibration: {calibration}")
+
+    profile_hash = hashlib.sha1(json.dumps(PROFILE, sort_keys=True).encode()).hexdigest()[:10]
     cache = json.loads(SCORES.read_text()) if SCORES.exists() else {}
+    stale = cache.pop("_profile_hash", None) != profile_hash
+    stale = cache.pop("_version", None) != CACHE_VERSION or stale
+    if stale:
+        print("profile or text changed: rescoring")
+        cache = {}
     print(f"scores cached: {len(cache)}")
+    cache["_profile_hash"] = profile_hash
+    cache["_version"] = CACHE_VERSION
 
     router = None
     scored = []
     for i, job in enumerate(jobs, 1):
         key = score_key(job)
-        if key in cache:
-            scored.append(job | cache[key])
+        entry = cache.get(key)
+        if entry and "answers" in entry:
+            answers = apply_calibration(entry["answers"], calibration)
+            scored.append(job | compute_final_percent(answers, PROFILE))
+            continue
+        if entry:
+            scored.append(job | entry)
             continue
         if router is None:
             router = Router(preload=["english", "multilingual"], device="cuda")
         result = router.predict(build_state(job), QUESTIONS)
-        score = compute_final_percent(result["answers"], PROFILE)
-        cache[key] = score
+        answers = apply_calibration(result["answers"], calibration)
+        score = compute_final_percent(answers, PROFILE)
+        cache[key] = score | {"answers": answers}
         scored.append(job | score)
 
         if i % 50 == 0:

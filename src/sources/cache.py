@@ -14,3 +14,14 @@ def fetch(url, headers, ttl=TTL):
     CACHE.mkdir(exist_ok=True)
     key.write_text(r.text)
     return r.json()
+
+
+def fetch_text(url, headers, ttl=TTL):
+    key = CACHE / (hashlib.sha1(url.encode()).hexdigest() + ".html")
+    if key.exists() and time.time() - key.stat().st_mtime < ttl:
+        return key.read_text()
+    r = requests.get(url, headers=headers, timeout=30)
+    r.raise_for_status()
+    CACHE.mkdir(exist_ok=True)
+    key.write_text(r.text)
+    return r.text
