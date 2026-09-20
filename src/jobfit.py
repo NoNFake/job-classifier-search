@@ -20,7 +20,8 @@ PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
 TOP = 100
 SCORES = Path(".cache/scores.json")
 CALIBRATION = Path("calibration.json")
-CACHE_VERSION = "enriched-2"
+CACHE_VERSION = "enriched-3"
+SCORE_LIMIT = 100
 
 def clean(text):
     return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
@@ -382,8 +383,11 @@ def main():
     cache["_profile_hash"] = profile_hash
     cache["_version"] = CACHE_VERSION
 
+    jobs.sort(key=lambda j: (score_key(j) in cache, tech_hits(j)), reverse=True)
+
     router = None
     scored = []
+    fresh = 0
     for i, job in enumerate(jobs, 1):
         key = score_key(job)
         entry = cache.get(key)
@@ -394,18 +398,22 @@ def main():
         if entry:
             scored.append(job | entry)
             continue
+        if fresh >= SCORE_LIMIT:
+            continue
         if router is None:
-            router = Router(preload=["english", "multilingual"], device="cuda")
-        result = router.predict(build_state(job), QUESTIONS)
+            router = Router(preload=["multilingual"], device="cuda")
+        result = router.predict(build_state(job), QUESTIONS, model="multilingual")
         answers = apply_calibration(result["answers"], calibration)
         score = compute_final_percent(answers, PROFILE)
         cache[key] = score | {"answers": answers}
         scored.append(job | score)
+        fresh += 1
 
-        if i % 50 == 0:
-            print(f"{i}/{len(jobs)}")
+        if fresh % 50 == 0:
+            print(f"scored new: {fresh}")
             SCORES.write_text(json.dumps(cache, ensure_ascii=False))
     SCORES.write_text(json.dumps(cache, ensure_ascii=False))
+    print(f"scored new: {fresh} | left for next run: {len(jobs) - len(scored)}")
     scored.sort(key=lambda j: j["final_percent"], reverse=True)
     it_jobs = [j for j in scored if not warehouse_job(j)]
     warehouse_jobs = [j for j in scored if warehouse_job(j)]

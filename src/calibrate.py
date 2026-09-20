@@ -34,10 +34,10 @@ def main():
                 rows.append((row, job))
     print(f"labeled rows matched: {len(rows)}")
 
-    router = Router(preload=["english", "multilingual"], device="cuda")
+    router = Router(preload=["multilingual"], device="cuda")
     samples = {"skill_overlap": [], "role_fit": [], "spam_or_mass_recruiting": []}
     for row, job in rows:
-        answers = router.predict(build_state(job), QUESTIONS)["answers"]
+        answers = router.predict(build_state(job), QUESTIONS, model="multilingual")["answers"]
         if row["human_skill_overlap"]:
             p = answers["skill_overlap"]["probabilities"]
             samples["skill_overlap"].append(([p[str(i)] for i in range(5)], int(float(row["human_skill_overlap"]))))
