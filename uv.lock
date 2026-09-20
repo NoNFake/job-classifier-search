@@ -154,14 +154,18 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "laya" },
+    { name = "pyyaml" },
     { name = "requests" },
+    { name = "rich" },
     { name = "tabulate" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "laya", specifier = ">=0.3.3" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=2.34.2" },
+    { name = "rich", specifier = ">=15.0.0" },
     { name = "tabulate", specifier = ">=0.10.0" },
 ]
 

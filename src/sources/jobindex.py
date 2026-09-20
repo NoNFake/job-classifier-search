@@ -1,6 +1,6 @@
 import concurrent.futures as cf
 
-import requests
+# import requests
 from tabulate import tabulate
 from sources.cache import fetch as cached
 
@@ -10,22 +10,42 @@ BASE  = "https://www.jobindex.dk/api/jobsearch/v3/?"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
 }
+WORKERS = 8
 
 
-def fetch(page):
+def _fetch(page):
     # r = requests.get(f"{BASE}{QUERY}&page={page}", headers=HEADERS, timeout=30)
     # r.raise_for_status()
     # return r.json()
     url = f"{BASE}{QUERY}&page={page}"
     return cached(url, HEADERS)
 
-first = fetch(1)
-pages = min(first["total_pages"], first["max_page"])
-results = first["results"]
+# first = fetch(1)
+# pages = min(first["total_pages"], first["max_page"])
+# results = first["results"]
+
+def get_jobs():
+    first = _fetch(1)
+    pages = min(first["total_pages"], first["max_page"])
+    jobs = list(first["results"])
+
+    with cf.ThreadPoolExecutor(WORKERS) as pool:
+        for data in pool.map(_fetch, range(2, pages + 1)):
+            jobs += data["results"]
+    return jobs 
+
+def main():
+    jobs = get_jobs()
+
+    table_data = [
+        [i, j.get("companytext") or j["company"]["name"], j["headline"][:40], j.get("area", "")]
+        for i, j in enumerate(jobs, 1)
+    ]
+    print(f" found: {len(jobs)}".center(60))
+    print(tabulate(table_data, headers=["#", "company", "position", "location"], tablefmt="rounded_grid"))
 
 
-
-
+"""
 with cf.ThreadPoolExecutor(8) as pool:
     # for url, ads in zip(urls, pool.map(fetch, urls)):
     #     print(url)
@@ -69,3 +89,4 @@ table_data = [
 
 headres_table = ["#", "company", "position", "location"]
 print(tabulate(table_data, headers=headres_table, tablefmt="rounded_grid"))
+"""
