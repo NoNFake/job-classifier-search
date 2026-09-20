@@ -2,7 +2,7 @@ import csv
 import json
 from pathlib import Path
 
-from jobfit import load_jobs, score_key
+from jobfit import blacklisted, load_jobs, score_key
 
 SCORES = Path(".cache/scores.json")
 OUT = Path("labels.csv")
@@ -11,7 +11,7 @@ TOP = 200
 
 def main():
     cache = json.loads(SCORES.read_text()) if SCORES.exists() else {}
-    jobs = [j for j in load_jobs() if score_key(j) in cache]
+    jobs = [j for j in load_jobs() if score_key(j) in cache and not blacklisted(j)]
     jobs.sort(key=lambda j: cache[score_key(j)]["final_percent"], reverse=True)
 
     with OUT.open("w", newline="") as fh:

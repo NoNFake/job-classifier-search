@@ -20,7 +20,7 @@ PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
 TOP = 100
 SCORES = Path(".cache/scores.json")
 CALIBRATION = Path("calibration.json")
-CACHE_VERSION = "enriched-1"
+CACHE_VERSION = "enriched-2"
 
 def clean(text):
     return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
@@ -108,7 +108,8 @@ def dedupe(jobs):
 
 
 PROFILE_SUMMARY = (
-    f"{PROFILE['seniority']} engineer targeting {', '.join(PROFILE['roles'])}. "
+    f"Candidate: {PROFILE['seniority']} developer, also open to student, intern and entry-level roles. "
+    f"Target roles: {', '.join(PROFILE['roles'])}. "
     f"Target level: {', '.join(PROFILE['preferred_seniority'])}. "
     f"Strong: {', '.join(PROFILE['skills']['strong'])}. "
     f"Good: {', '.join(PROFILE['skills']['good'])}. "
@@ -137,6 +138,28 @@ def tech_hits(job):
     return len(set(KEYWORD_RE.findall((job["title"] + " " + job["description"]).lower())))
 
 
+def _matches(text, patterns):
+    text = (text or "").lower()
+    for pattern in patterns:
+        p = pattern.lower().strip()
+        if not p:
+            continue
+        if len(p) <= 3:
+            if re.search(rf"\b{re.escape(p)}\b", text):
+                return p
+        elif p in text:
+            return p
+    return None
+
+
+def blacklisted(job):
+    return (
+        _matches(job["company"], PROFILE.get("blacklist_companies", []))
+        or _matches(job["title"], PROFILE.get("blacklist_title_keywords", []))
+        or _matches(job["description"], PROFILE.get("blacklist_description_patterns", []))
+    )
+
+
 def build_state(job):
     return {
         "title": job["title"],
@@ -162,6 +185,7 @@ QUESTIONS = {
             "qa_testing": "manual or automated testing",
             "support_operations": "customer support, IT operations",
             "sales_marketing": "sales, marketing, lead generation",
+            "warehouse_logistics": "warehouse, picking, packing, sorting, unloading, forklift",
             "other": "anything else",
         },
     },
@@ -234,7 +258,7 @@ def compute_final_percent(answers, profile):
     spam = answers["spam_or_mass_recruiting"]["noul"]
     sponsorship = answers["sponsorship_needed"]["noul"]
 
-    family_score = sum(probs.get(f, 0.0) for f in ("backend", "data_engineering", "ml_ai", "devops_platform"))
+    family_score = sum(probs.get(f, 0.0) for f in ("backend", "data_engineering", "ml_ai", "devops_platform", "warehouse_logistics"))
     language_score = english * (1.0 - danish)
     location_score = copenhagen
     legal_score = 1.0 - 0.2 * sponsorship if not profile["work_authorization"]["needs_sponsorship"] else 1.0 - sponsorship
@@ -322,8 +346,15 @@ def load_jobs():
 
 def main():
     all_jobs = load_jobs()
-    jobs = [j for j in all_jobs if tech_hits(j)]
-    print(f"jobs after dedupe: {len(all_jobs)} | relevant: {len(jobs)}")
+    jobs, blocked = [], 0
+    for job in all_jobs:
+        if not tech_hits(job):
+            continue
+        if blacklisted(job):
+            blocked += 1
+            continue
+        jobs.append(job)
+    print(f"jobs after dedupe: {len(all_jobs)} | relevant: {len(jobs)} | blacklisted: {blocked}")
 
     calibration = json.loads(CALIBRATION.read_text()) if CALIBRATION.exists() else {}
     if calibration:
