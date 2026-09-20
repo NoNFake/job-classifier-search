@@ -1,5 +1,6 @@
 import concurrent.futures as cf
 import html
+import json
 import re
 
 from pathlib import Path
@@ -15,6 +16,7 @@ from sources.jobnet import get_jobs as jobnet_jobs
 
 PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
 TOP = 50
+SCORES = Path(".cache/scores.json")
 
 def clean(text):
     return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
@@ -24,23 +26,23 @@ def normalize(job, source):
     if source == "jobnet":
         return {
             "source": source,
-            "id": job.get("tid"),
-            "title": job.get("headline") or "",
-            "company": job.get("companytext") or (job.get("company") or {}).get("name") or "",
-            "location": job.get("area") or "",
-            "url": job.get("share_url") or "",
+            "id": job.get("jobAdId"),
+            "title": job.get("title") or "",
+            "company": job.get("hiringOrgName") or "",
+            "location": f"{job.get('postalCode') or ''} {job.get('postalDistrictName') or ''}".strip(),
+            "url": job.get("jobAdUrl") or f"https://jobnet.dk/jobannonce/{job.get('jobAdId')}",
             "description": clean(job.get("description")),
-            "posted": job.get("firstdate") or "",
+            "posted": job.get("publicationDate") or "",
         }
     return {
         "source": source,
-        "id": job.get("jobAdId"),
-        "title": job.get("title") or "",
-        "company": job.get("hiringOrgName") or "",
-        "location": f"{job.get('postalCode') or ''} {job.get('postalDistrictName') or ''}".strip(),
-        "url": job.get("jobAdUrl") or f"https://jobnet.dk/jobannonce/{job.get('jobAdId')}",
+        "id": job.get("tid"),
+        "title": job.get("headline") or "",
+        "company": job.get("companytext") or (job.get("company") or {}).get("name") or "",
+        "location": job.get("area") or "",
+        "url": job.get("share_url") or "",
         "description": clean(job.get("description")),
-        "posted": job.get("publicationDate") or "",
+        "posted": job.get("firstdate") or "",
     }
 
 def dedupe(jobs):
@@ -190,6 +192,10 @@ def compute_final_percent(answers, profile):
     }
 
 
+def score_key(job):
+    return f"{job['title'].lower().strip()}|{job['company'].lower().strip()}"
+
+
 def percent_text(value):
     style = "green" if value >= 80 else "yellow" if value >= 60 else "dim"
     return Text(f"{value}%", style=style)
@@ -205,17 +211,27 @@ def main():
     )
     print(f"jobs after dedupe: {len(jobs)}")
 
-    router = Router(
-        preload=["english", "multilingual"], device="cuda"
-    )
+    cache = json.loads(SCORES.read_text()) if SCORES.exists() else {}
+    print(f"scores cached: {len(cache)}")
 
+    router = None
     scored = []
     for i, job in enumerate(jobs, 1):
-        result =  router.predict(build_state(job), QUESTIONS)
-        scored.append(job | compute_final_percent(result["answers"], PROFILE))
+        key = score_key(job)
+        if key in cache:
+            scored.append(job | cache[key])
+            continue
+        if router is None:
+            router = Router(preload=["english", "multilingual"], device="cuda")
+        result = router.predict(build_state(job), QUESTIONS)
+        score = compute_final_percent(result["answers"], PROFILE)
+        cache[key] = score
+        scored.append(job | score)
 
         if i % 50 == 0:
             print(f"{i}/{len(jobs)}")
+            SCORES.write_text(json.dumps(cache, ensure_ascii=False))
+    SCORES.write_text(json.dumps(cache, ensure_ascii=False))
     scored.sort(key=lambda j: j["final_percent"], reverse=True)
 
     table = Table(title=f"TOP {TOP} jobs for {PROFILE['location_preference']}")
@@ -237,4 +253,6 @@ def main():
 
     Console().print(table)
 
-main()
+
+if __name__ == "__main__":
+    main()
