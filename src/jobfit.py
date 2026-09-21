@@ -4,6 +4,7 @@ import html
 import json
 import re
 
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -20,6 +21,7 @@ PROFILE = yaml.safe_load(Path("profile.yaml").read_text())
 TOP = 100
 SCORES = Path(".cache/scores.json")
 CALIBRATION = Path("calibration.json")
+REPORT = Path("jobs.md")
 CACHE_VERSION = "enriched-3"
 SCORE_LIMIT = 100
 
@@ -421,6 +423,37 @@ def main():
 
     render(f"TOP {TOP} IT jobs for {PROFILE['location_preference']}", it_jobs)
     render(f"TOP {TOP} warehouse / logistics for {PROFILE['location_preference']}", warehouse_jobs)
+    write_markdown(it_jobs, warehouse_jobs)
+
+
+def markdown_table(title, jobs):
+    lines = [
+        f"## {title}",
+        "",
+        "| Match | Title | Company | Location | Source |",
+        "| ---: | --- | --- | --- | --- |",
+    ]
+    for job in jobs[:TOP]:
+        cells = [job["title"], job["company"], job["location"]]
+        cells = [c.replace("|", "\\|") for c in cells]
+        lines.append(
+            f"| {job['final_percent']}% | [{cells[0]}]({job['url']}) | {cells[1]} | {cells[2]} | {job['source']} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_markdown(it_jobs, warehouse_jobs):
+    text = "\n".join([
+        f"# Job matches — {PROFILE['location_preference']}",
+        "",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "",
+        markdown_table(f"IT ({len(it_jobs)})", it_jobs),
+        "",
+        markdown_table(f"Warehouse / logistics ({len(warehouse_jobs)})", warehouse_jobs),
+    ])
+    REPORT.write_text(text)
+    print(f"wrote {REPORT}")
 
 
 def render(title, jobs):
