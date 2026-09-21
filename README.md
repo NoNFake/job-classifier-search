@@ -48,6 +48,19 @@ page, about four minutes. Later runs use the cache and take seconds.
 6. Output. `compute_final_percent` combines the answers by weight. Rich prints
    the tables, `jobs.md` keeps the same rows with clickable titles.
 
+## Model
+
+Ranking uses [Laya](https://github.com/NandhaKishorM/laya), a multilingual
+non-autoregressive decision model. Checkpoint: `convaiinnovations/laya`,
+subfolder `multilingual` (mmBERT-base, 322M), loaded with
+`Router(preload=["multilingual"])`. Every question is answered in a single
+forward pass and no text is generated, so there is nothing to parse or
+hallucinate.
+
+Laya was not trained on job matching. Its answers are signals, not verdicts:
+the keyword gate and blacklists do the filtering, and only calibration on
+labeled data makes the percentages meaningful.
+
 ## Profile
 
 `profile.yaml` holds roles, skills, languages, seniority, salary floor and the
@@ -128,6 +141,4 @@ next run. `rm -rf .cache` rebuilds everything.
 - Jobindex `robots.txt` disallows `/api/` and allows `/vis-job/` and
   `/jobannonce/<id>/<slug>`. Jobnet publishes no reachable `robots.txt`. Volume
   is small and every response is cached.
-- Laya was not trained on job matching. The keyword gate and blacklists do the
-  filtering; the model only reranks what survives.
 - Jobindex external ads expose a 300-600 character teaser, not the full text.

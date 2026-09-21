@@ -1,7 +1,7 @@
 [project]
 name = "classifier"
 version = "0.1.0"
-description = "Add your description here"
+description = "Job search for Copenhagen: aggregates jobnet.dk and jobindex.dk, filters by profile, ranks with Laya"
 readme = "README.md"
 authors = [
     { name = "yurii", email = "uraklimek@gmail.com" }
